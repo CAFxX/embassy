@@ -98,6 +98,8 @@ impl<F: Future> Future for TimeoutFuture<F> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Timer {
     expires_at: Instant,
+    expires_min: Instant,
+    expires_preferred: Instant,
     yielded_once: bool,
 }
 
@@ -107,6 +109,22 @@ impl Timer {
     pub fn at(expires_at: Instant) -> Self {
         Self {
             expires_at,
+            expires_min: expires_at,
+            expires_preferred: expires_at,
+            yielded_once: false,
+        }
+    }
+
+    /// Expire at specified [Instant](struct.Instant.html), with a flexible range.
+    ///
+    /// The timer should preferably fire at `preferred`, but is allowed to fire at any time in the range `min..=max`.
+    ///
+    /// Will expire immediately if `min` is in the past.
+    pub fn at_flexible(preferred: Instant, min: Instant, max: Instant) -> Self {
+        Self {
+            expires_at: max,
+            expires_min: min,
+            expires_preferred: preferred,
             yielded_once: false,
         }
     }
@@ -125,8 +143,24 @@ impl Timer {
     /// }
     /// ```
     pub fn after(duration: Duration) -> Self {
+        let expires_at = Instant::now() + duration;
         Self {
-            expires_at: Instant::now() + duration,
+            expires_at,
+            expires_min: expires_at,
+            expires_preferred: expires_at,
+            yielded_once: false,
+        }
+    }
+
+    /// Expire after specified [Duration](struct.Duration.html), with a flexible range.
+    ///
+    /// The timer should preferably fire after `duration`, but is allowed to fire any time between `min` and `max`.
+    pub fn after_flexible(duration: Duration, min: Duration, max: Duration) -> Self {
+        let now = Instant::now();
+        Self {
+            expires_at: now + max,
+            expires_min: now + min,
+            expires_preferred: now + duration,
             yielded_once: false,
         }
     }
@@ -182,10 +216,15 @@ impl Unpin for Timer {}
 impl Future for Timer {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.yielded_once && self.expires_at <= Instant::now() {
+        if self.yielded_once && self.expires_min <= Instant::now() {
             Poll::Ready(())
         } else {
-            embassy_time_driver::schedule_wake(self.expires_at.as_ticks(), cx.waker());
+            embassy_time_driver::schedule_wake_flexible(
+                self.expires_preferred.as_ticks(),
+                self.expires_min.as_ticks(),
+                self.expires_at.as_ticks(),
+                cx.waker(),
+            );
             self.yielded_once = true;
             Poll::Pending
         }
@@ -237,13 +276,31 @@ impl Future for Timer {
 pub struct Ticker {
     expires_at: Instant,
     duration: Duration,
+    min_offset: Duration,
+    max_offset: Duration,
 }
 
 impl Ticker {
     /// Creates a new ticker that ticks at the specified duration interval.
     pub fn every(duration: Duration) -> Self {
         let expires_at = Instant::now() + duration;
-        Self { expires_at, duration }
+        Self {
+            expires_at,
+            duration,
+            min_offset: Duration::from_ticks(0),
+            max_offset: Duration::from_ticks(0),
+        }
+    }
+
+    /// Creates a new ticker that ticks at the specified duration interval, with a flexible range.
+    pub fn every_flexible(duration: Duration, min: Duration, max: Duration) -> Self {
+        let expires_at = Instant::now() + duration;
+        Self {
+            expires_at,
+            duration,
+            min_offset: duration - min,
+            max_offset: max - duration,
+        }
     }
 
     /// Resets the ticker back to its original state.
@@ -270,12 +327,17 @@ impl Ticker {
     /// The produced Future is cancel safe, meaning no tick is lost if the Future is dropped.
     pub fn next(&mut self) -> impl Future<Output = ()> + Send + Sync + '_ {
         poll_fn(|cx| {
-            if self.expires_at <= Instant::now() {
+            if self.expires_at - self.min_offset <= Instant::now() {
                 let dur = self.duration;
                 self.expires_at += dur;
                 Poll::Ready(())
             } else {
-                embassy_time_driver::schedule_wake(self.expires_at.as_ticks(), cx.waker());
+                embassy_time_driver::schedule_wake_flexible(
+                    self.expires_at.as_ticks(),
+                    (self.expires_at - self.min_offset).as_ticks(),
+                    (self.expires_at + self.max_offset).as_ticks(),
+                    cx.waker(),
+                );
                 Poll::Pending
             }
         })
@@ -287,12 +349,17 @@ impl Unpin for Ticker {}
 impl Stream for Ticker {
     type Item = ();
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.expires_at <= Instant::now() {
+        if self.expires_at - self.min_offset <= Instant::now() {
             let dur = self.duration;
             self.expires_at += dur;
             Poll::Ready(Some(()))
         } else {
-            embassy_time_driver::schedule_wake(self.expires_at.as_ticks(), cx.waker());
+            embassy_time_driver::schedule_wake_flexible(
+                self.expires_at.as_ticks(),
+                (self.expires_at - self.min_offset).as_ticks(),
+                (self.expires_at + self.max_offset).as_ticks(),
+                cx.waker(),
+            );
             Poll::Pending
         }
     }

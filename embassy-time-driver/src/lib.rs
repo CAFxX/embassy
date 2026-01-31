@@ -135,12 +135,22 @@ pub trait Driver: Send + Sync + 'static {
 
     /// Schedules a waker to be awoken at moment `at`.
     /// If this moment is in the past, the waker might be awoken immediately.
-    fn schedule_wake(&self, at: u64, waker: &Waker);
+    fn schedule_wake(&self, at: u64, waker: &Waker) {
+        self.schedule_wake_flexible(at, at, at, waker)
+    }
+
+    /// Schedules a waker to be awoken at moment `at`, but allows it to be woken up at any time in range `min..=max`.
+    /// If `min` is in the past, the waker might be awoken immediately.
+    fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &Waker) {
+        let _ = (min, max);
+        self.schedule_wake(at, waker)
+    }
 }
 
 unsafe extern "Rust" {
     fn _embassy_time_now() -> u64;
     fn _embassy_time_schedule_wake(at: u64, waker: &Waker);
+    fn _embassy_time_schedule_wake_flexible(at: u64, min: u64, max: u64, waker: &Waker);
 }
 
 /// See [`Driver::now`]
@@ -153,6 +163,12 @@ pub fn now() -> u64 {
 #[inline]
 pub fn schedule_wake(at: u64, waker: &Waker) {
     unsafe { _embassy_time_schedule_wake(at, waker) }
+}
+
+/// Schedule the given waker to be woken at `at`.
+#[inline]
+pub fn schedule_wake_flexible(at: u64, min: u64, max: u64, waker: &Waker) {
+    unsafe { _embassy_time_schedule_wake_flexible(at, min, max, waker) }
 }
 
 /// Set the time Driver implementation.
@@ -173,6 +189,12 @@ macro_rules! time_driver_impl {
         #[inline]
         fn _embassy_time_schedule_wake(at: u64, waker: &core::task::Waker) {
             <$t as $crate::Driver>::schedule_wake(&$name, at, waker);
+        }
+
+        #[unsafe(no_mangle)]
+        #[inline]
+        fn _embassy_time_schedule_wake_flexible(at: u64, min: u64, max: u64, waker: &core::task::Waker) {
+            <$t as $crate::Driver>::schedule_wake_flexible(&$name, at, min, max, waker);
         }
     };
 }

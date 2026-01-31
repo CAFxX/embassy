@@ -29,6 +29,12 @@ timer-item-size-6-words = []
 ## 8 words
 timer-item-size-8-words = []
 
+## 10 words
+timer-item-size-10-words = []
+
+## 12 words
+timer-item-size-12-words = []
+
 [package.metadata.embassy_docs]
 src_base = "https://github.com/embassy-rs/embassy/blob/embassy-executor-timer-queue-v$VERSION/embassy-executor-timer-queue/src/"
 src_base_git = "https://github.com/embassy-rs/embassy/blob/$COMMIT/embassy-executor-timer-queue/src/"

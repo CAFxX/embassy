@@ -9,7 +9,9 @@ use heapless::Vec;
 
 #[derive(Debug)]
 struct Timer {
-    at: u64,
+    at: u64, // max/L
+    min: u64, // E
+    preferred: u64, // T
     waker: Waker,
 }
 
@@ -50,12 +52,22 @@ impl<const QUEUE_SIZE: usize> ConstGenericQueue<QUEUE_SIZE> {
     /// If this function returns `true`, the called should find the next expiration time and set
     /// a new alarm for that time.
     pub fn schedule_wake(&mut self, at: u64, waker: &Waker) -> bool {
+        self.schedule_wake_flexible(at, at, at, waker)
+    }
+
+    /// Schedules a task to run at a specific time, and returns whether any changes were made.
+    ///
+    /// If this function returns `true`, the called should find the next expiration time and set
+    /// a new alarm for that time.
+    pub fn schedule_wake_flexible(&mut self, at: u64, min: u64, max: u64, waker: &Waker) -> bool {
         self.queue
             .iter_mut()
             .find(|timer| timer.waker.will_wake(waker))
             .map(|timer| {
-                if timer.at > at {
-                    timer.at = at;
+                if timer.at > max {
+                    timer.at = max;
+                    timer.min = min;
+                    timer.preferred = at;
                     true
                 } else {
                     false
@@ -64,7 +76,9 @@ impl<const QUEUE_SIZE: usize> ConstGenericQueue<QUEUE_SIZE> {
             .unwrap_or_else(|| {
                 let mut timer = Timer {
                     waker: waker.clone(),
-                    at,
+                    at: max,
+                    min,
+                    preferred: at,
                 };
 
                 loop {
@@ -87,7 +101,7 @@ impl<const QUEUE_SIZE: usize> ConstGenericQueue<QUEUE_SIZE> {
         let mut i = 0;
         while i < self.queue.len() {
             let timer = &self.queue[i];
-            if timer.at <= now {
+            if timer.min <= now {
                 let timer = self.queue.swap_remove(i);
                 timer.waker.wake();
             } else {
@@ -139,6 +153,14 @@ impl Queue {
     /// a new alarm for that time.
     pub fn schedule_wake(&mut self, at: u64, waker: &Waker) -> bool {
         self.queue.schedule_wake(at, waker)
+    }
+
+    /// Schedules a task to run at a specific time, and returns whether any changes were made.
+    ///
+    /// If this function returns `true`, the called should find the next expiration time and set
+    /// a new alarm for that time.
+    pub fn schedule_wake_flexible(&mut self, at: u64, min: u64, max: u64, waker: &Waker) -> bool {
+        self.queue.schedule_wake_flexible(at, min, max, waker)
     }
 
     /// Dequeues expired timers and returns the next alarm time.

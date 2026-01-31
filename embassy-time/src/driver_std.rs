@@ -48,6 +48,14 @@ impl Driver for TimeDriver {
             self.signaler.signal();
         }
     }
+
+    fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &core::task::Waker) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.init();
+        if inner.queue.schedule_wake_flexible(at, min, max, waker) {
+            self.signaler.signal();
+        }
+    }
 }
 
 fn alarm_thread() {

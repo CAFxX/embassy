@@ -15,8 +15,14 @@ struct QueueItem {
     /// value of `Some(dangling_pointer)`
     pub next: Cell<Option<NonNull<QueueItem>>>,
 
-    /// The time at which this item expires.
+    /// The latest time at which this item can fire.
     pub expires_at: u64,
+
+    /// The earliest time at which this item can fire.
+    pub expires_min: u64,
+
+    /// The preferred time at which this item should fire.
+    pub expires_preferred: u64,
 
     /// The registered waker. If Some, the item is enqueued in the timer queue.
     pub waker: Option<Waker>,
@@ -56,6 +62,14 @@ impl Queue {
     /// If this function returns `true`, the called should find the next expiration time and set
     /// a new alarm for that time.
     pub fn schedule_wake(&mut self, at: u64, waker: &Waker) -> bool {
+        self.schedule_wake_flexible(at, at, at, waker)
+    }
+
+    /// Schedules a task to run at a specific time.
+    ///
+    /// If this function returns `true`, the called should find the next expiration time and set
+    /// a new alarm for that time.
+    pub fn schedule_wake_flexible(&mut self, at: u64, min: u64, max: u64, waker: &Waker) -> bool {
         let item = unsafe {
             // Safety: the `&mut self`, along with the Safety note of the Queue, are sufficient to
             // ensure that this function creates the only mutable reference to the queue item.
@@ -63,9 +77,11 @@ impl Queue {
         };
         let item = unsafe { item.as_mut::<QueueItem>() };
         match item.waker.as_ref() {
-            Some(_) if at <= item.expires_at => {
+            Some(_) if max <= item.expires_at => {
                 // If expiration is sooner than previously set, update.
-                item.expires_at = at;
+                item.expires_at = max;
+                item.expires_min = min;
+                item.expires_preferred = at;
                 // The waker is always stored in its own queue item, so we don't need to update it.
 
                 // Trigger a queue update in case this item can be immediately dequeued.
@@ -83,7 +99,9 @@ impl Queue {
 
                 let item = unsafe { item_ptr.as_mut() };
 
-                item.expires_at = at;
+                item.expires_at = max;
+                item.expires_min = min;
+                item.expires_preferred = at;
                 item.waker = Some(waker.clone());
                 item.next.set(prev);
                 // The default implementation doesn't care about the
@@ -102,7 +120,7 @@ impl Queue {
         let mut next_expiration = u64::MAX;
 
         self.retain(|item| {
-            if item.expires_at <= now {
+            if item.expires_min <= now {
                 // Timer expired, process task.
                 if let Some(waker) = item.waker.take() {
                     waker.wake();

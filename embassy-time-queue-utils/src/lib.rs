@@ -4,6 +4,8 @@
 
 #[cfg(feature = "_generic-queue")]
 pub mod queue_generic;
+#[cfg(all(feature = "_generic-queue", test))]
+mod queue_generic_test;
 #[cfg(not(feature = "_generic-queue"))]
 pub mod queue_integrated;
 

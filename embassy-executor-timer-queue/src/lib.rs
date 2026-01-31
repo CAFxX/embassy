@@ -22,7 +22,11 @@
 
 use core::task::Waker;
 
-const ITEM_WORDS: usize = if cfg!(feature = "timer-item-size-8-words") {
+const ITEM_WORDS: usize = if cfg!(feature = "timer-item-size-12-words") {
+    12
+} else if cfg!(feature = "timer-item-size-10-words") {
+    10
+} else if cfg!(feature = "timer-item-size-8-words") {
     8
 } else if cfg!(feature = "timer-item-size-6-words") {
     6
