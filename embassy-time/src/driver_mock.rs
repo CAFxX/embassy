@@ -73,10 +73,12 @@ impl Driver for MockDriver {
     fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &Waker) {
         critical_section::with(|cs| {
             let inner = &mut *self.0.borrow_ref_mut(cs);
-            // enqueue it
-            inner.queue.schedule_wake_flexible(at, min, max, waker);
-            // wake it if it's in the past.
-            inner.queue.next_expiration(inner.now.as_ticks());
+            embassy_time_queue_utils::schedule_wake_with_alarm(
+                &mut inner.queue,
+                at, min, max, waker,
+                || inner.now.as_ticks(),
+                |_| true // Mock driver updates immediately
+            )
         })
     }
 }

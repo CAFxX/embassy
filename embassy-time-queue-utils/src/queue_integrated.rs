@@ -70,6 +70,7 @@ impl Queue {
     /// If this function returns `true`, the called should find the next expiration time and set
     /// a new alarm for that time.
     pub fn schedule_wake_flexible(&mut self, at: u64, min: u64, max: u64, waker: &Waker) -> bool {
+        assert!(min <= at && at <= max, "min <= at <= max");
         let item = unsafe {
             // Safety: the `&mut self`, along with the Safety note of the Queue, are sufficient to
             // ensure that this function creates the only mutable reference to the queue item.

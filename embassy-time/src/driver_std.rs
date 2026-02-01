@@ -44,9 +44,16 @@ impl Driver for TimeDriver {
     fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &core::task::Waker) {
         let mut inner = self.inner.lock().unwrap();
         inner.init();
-        if inner.queue.schedule_wake_flexible(at, min, max, waker) {
-            self.signaler.signal();
-        }
+
+        embassy_time_queue_utils::schedule_wake_with_alarm(
+            &mut inner.queue,
+            at, min, max, waker,
+            || 0, // now() not needed for std driver as it uses condvar
+            |_| {
+                self.signaler.signal();
+                true
+            }
+        )
     }
 }
 

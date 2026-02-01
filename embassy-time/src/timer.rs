@@ -121,6 +121,7 @@ impl Timer {
     ///
     /// Will expire immediately if `min` is in the past.
     pub fn at_flexible(preferred: Instant, min: Instant, max: Instant) -> Self {
+        assert!(min <= preferred && preferred <= max);
         Self {
             expires_at: max,
             expires_min: min,
@@ -156,6 +157,7 @@ impl Timer {
     ///
     /// The timer should preferably fire after `duration`, but is allowed to fire any time between `min` and `max`.
     pub fn after_flexible(duration: Duration, min: Duration, max: Duration) -> Self {
+        assert!(min <= duration && duration <= max);
         let now = Instant::now();
         Self {
             expires_at: now + max,
@@ -294,6 +296,7 @@ impl Ticker {
 
     /// Creates a new ticker that ticks at the specified duration interval, with a flexible range.
     pub fn every_flexible(duration: Duration, min: Duration, max: Duration) -> Self {
+        assert!(min <= duration && duration <= max);
         let expires_at = Instant::now() + duration;
         Self {
             expires_at,

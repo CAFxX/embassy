@@ -60,6 +60,7 @@ impl<const QUEUE_SIZE: usize> ConstGenericQueue<QUEUE_SIZE> {
     /// If this function returns `true`, the called should find the next expiration time and set
     /// a new alarm for that time.
     pub fn schedule_wake_flexible(&mut self, at: u64, min: u64, max: u64, waker: &Waker) -> bool {
+        assert!(min <= at && at <= max, "min <= at <= max");
         self.queue
             .iter_mut()
             .find(|timer| timer.waker.will_wake(waker))

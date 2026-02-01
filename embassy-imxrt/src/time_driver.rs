@@ -241,12 +241,12 @@ impl Driver for Rtc {
         critical_section::with(|cs| {
             let mut queue = self.queue.borrow(cs).borrow_mut();
 
-            if queue.schedule_wake_flexible(at, min, max, waker) {
-                let mut next = queue.next_expiration(self.now());
-                while !self.set_alarm(cs, next) {
-                    next = queue.next_expiration(self.now());
-                }
-            }
+            embassy_time_queue_utils::schedule_wake_with_alarm(
+                &mut *queue,
+                at, min, max, waker,
+                || self.now(),
+                |next| self.set_alarm(cs, next)
+            );
         })
     }
 }
@@ -387,29 +387,16 @@ impl Driver for OsTimer {
         gray_to_dec(t)
     }
 
-    fn schedule_wake(&self, at: u64, waker: &core::task::Waker) {
-        critical_section::with(|cs| {
-            let mut queue = self.queue.borrow(cs).borrow_mut();
-
-            if queue.schedule_wake(at, waker) {
-                let mut next = queue.next_expiration(self.now());
-                while !self.set_alarm(cs, next) {
-                    next = queue.next_expiration(self.now());
-                }
-            }
-        })
-    }
-
     fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &core::task::Waker) {
         critical_section::with(|cs| {
             let mut queue = self.queue.borrow(cs).borrow_mut();
 
-            if queue.schedule_wake_flexible(at, min, max, waker) {
-                let mut next = queue.next_expiration(self.now());
-                while !self.set_alarm(cs, next) {
-                    next = queue.next_expiration(self.now());
-                }
-            }
+            embassy_time_queue_utils::schedule_wake_with_alarm(
+                &mut *queue,
+                at, min, max, waker,
+                || self.now(),
+                |next| self.set_alarm(cs, next)
+            );
         })
     }
 }
