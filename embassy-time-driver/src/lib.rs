@@ -141,6 +141,13 @@ pub trait Driver: Send + Sync + 'static {
 
     /// Schedules a waker to be awoken at moment `at`, but allows it to be woken up at any time in range `min..=max`.
     /// If `min` is in the past, the waker might be awoken immediately.
+    ///
+    /// The driver must ensure that the waker is woken at or after `min`, and at or before `max`.
+    /// The `at` parameter is a hint to the driver about when the wake is preferred (e.g. to minimize latency).
+    ///
+    /// Requirements:
+    /// - `min <= at <= max`
+    /// - If `min > max`, the behavior is unspecified.
     fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &Waker) {
         let _ = (min, max);
         self.schedule_wake(at, waker)

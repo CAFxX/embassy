@@ -83,19 +83,6 @@ impl Driver for TimeDriver {
         StdInstant::now().duration_since(zero).as_micros() as u64
     }
 
-    fn schedule_wake(&self, at: u64, waker: &core::task::Waker) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.init();
-        if inner.queue.schedule_wake(at, waker) {
-            let now = inner.now();
-            let mut next = inner.queue.next_expiration(now);
-            while !inner.set_alarm(next) {
-                let now = inner.now();
-                next = inner.queue.next_expiration(now);
-            }
-        }
-    }
-
     fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &core::task::Waker) {
         let mut inner = self.inner.lock().unwrap();
         inner.init();

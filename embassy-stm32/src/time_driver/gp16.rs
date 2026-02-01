@@ -350,19 +350,6 @@ impl Driver for RtcDriver {
         calc_now(period, counter)
     }
 
-    fn schedule_wake(&self, at: u64, waker: &core::task::Waker) {
-        critical_section::with(|cs| {
-            let mut queue = self.queue.borrow(cs).borrow_mut();
-
-            if queue.schedule_wake(at, waker) {
-                let mut next = queue.next_expiration(self.now());
-                while !self.set_alarm(cs, next) {
-                    next = queue.next_expiration(self.now());
-                }
-            }
-        })
-    }
-
     fn schedule_wake_flexible(&self, at: u64, min: u64, max: u64, waker: &core::task::Waker) {
         critical_section::with(|cs| {
             let mut queue = self.queue.borrow(cs).borrow_mut();
